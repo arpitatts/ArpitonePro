@@ -1,0 +1,6 @@
+{
+  "name": "ARPITON",
+  "description": "AI Educational Content Creation Studio for structured pedagogical scripts, scientific visualizations, synchronized narration, and 3D classroom animations with Satya Gyan watermark.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
