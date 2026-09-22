@@ -1,4 +1,5 @@
 import { ParsedScene, WatermarkSettings } from '../types';
+import { ttsService } from './ttsService';
 
 export interface VideoExportOptions {
   resolution: '1080p' | '4k' | '720p';
@@ -8,17 +9,12 @@ export interface VideoExportOptions {
   onProgress?: (progress: number, message: string) => void;
 }
 
-// Resolution dimensions
 export const RESOLUTION_DIMENSIONS = {
-  '720p': { width: 1280, height: 720, label: '720p HD (1280×720)' },
-  '1080p': { width: 1920, height: 1080, label: '1080p Full HD (1920×1080)' },
-  '4k': { width: 3840, height: 2160, label: '4K Ultra HD (3840×2160)' },
+  '720p': { width: 1280, height: 720, label: '720p HD (1280x720)' },
+  '1080p': { width: 1920, height: 1080, label: '1080p Full HD (1920x1080)' },
+  '4k': { width: 3840, height: 2160, label: '4K Ultra HD (3840x2160)' },
 };
 
-/**
- * Client-Side Video & HD Slide Renderer
- * Generates real video (WebM/MP4) using HTML5 Canvas & MediaRecorder at 1080p or 4K.
- */
 export async function exportLectureVideo(
   scenes: ParsedScene[],
   options: VideoExportOptions
@@ -31,9 +27,8 @@ export async function exportLectureVideo(
     throw new Error('No slides to export.');
   }
 
-  onProgress?.(5, `Initializing ${resolution.toUpperCase()} video pipeline (${width}×${height})...`);
+  onProgress?.(5, `Initializing ${resolution.toUpperCase()} video pipeline (${width}x${height})...`);
 
-  // Create high-res offscreen canvas
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -43,11 +38,22 @@ export async function exportLectureVideo(
     throw new Error('Canvas 2D context is not available.');
   }
 
-  // Pre-draw first slide
   drawSlideFrame(ctx, scenes[0], 0, scenes.length, width, height, scaleFactor, watermarkSettings, hideCommandTags);
 
-  // Check MediaRecorder support
-  const stream = canvas.captureStream(30);
+  // 1. Setup Canvas Video Stream
+  const canvasStream = canvas.captureStream(30);
+
+  // 2. Setup Web Audio API Destination
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  const audioCtx = new AudioContextClass();
+  const audioDest = audioCtx.createMediaStreamDestination();
+
+  // 3. Combine Video and Audio
+  const combinedStream = new MediaStream([
+    ...canvasStream.getVideoTracks(),
+    ...audioDest.stream.getAudioTracks()
+  ]);
+
   let mimeType = 'video/webm;codecs=vp9,opus';
   if (!MediaRecorder.isTypeSupported(mimeType)) {
     mimeType = 'video/webm;codecs=vp8,opus';
@@ -56,7 +62,7 @@ export async function exportLectureVideo(
     }
   }
 
-  const mediaRecorder = new MediaRecorder(stream, {
+  const mediaRecorder = new MediaRecorder(combinedStream, {
     mimeType,
     videoBitsPerSecond: resolution === '4k' ? 25000000 : 8000000,
   });
@@ -72,40 +78,65 @@ export async function exportLectureVideo(
     mediaRecorder.onstop = () => {
       const finalBlob = new Blob(chunks, { type: mimeType });
       onProgress?.(100, `${resolution.toUpperCase()} Video render complete!`);
+      if (audioCtx.state !== 'closed') audioCtx.close();
       resolve(finalBlob);
     };
-
-    mediaRecorder.onerror = (e) => {
-      reject(e);
-    };
-
+    
+    mediaRecorder.onerror = reject;
     mediaRecorder.start();
 
-    // Render each slide sequentially
     let sceneIdx = 0;
     const totalScenes = scenes.length;
 
-    function renderNextSlide() {
+    async function renderNextSlide() {
       if (sceneIdx >= totalScenes) {
-        setTimeout(() => {
-          mediaRecorder.stop();
-        }, 800);
+        setTimeout(() => mediaRecorder.stop(), 1000);
         return;
       }
 
       const scene = scenes[sceneIdx];
-      const durationSec = Math.max(3, Math.min(scene.estimatedDurationSec || 6, 12));
-      const progressPercent = Math.round(((sceneIdx + 1) / totalScenes) * 90);
+      let slideDurationMs = 5000;
+
+      try {
+        onProgress?.(
+          Math.round(((sceneIdx) / totalScenes) * 90),
+          `Synthesizing Audio for Slide ${sceneIdx + 1}...`
+        );
+
+        const ttsResponse = await ttsService.synthesizeSpeech({
+          text: scene.narration,
+          language: 'English', 
+          voice: 'default',
+          speakingStyle: 'Professional lecturer',
+          speed: 1.0
+        });
+
+        if (ttsResponse.success && ttsResponse.audioUrl) {
+          const audioResponse = await fetch(ttsResponse.audioUrl);
+          const arrayBuffer = await audioResponse.arrayBuffer();
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          
+          slideDurationMs = audioBuffer.duration * 1000;
+
+          const sourceNode = audioCtx.createBufferSource();
+          sourceNode.buffer = audioBuffer;
+          sourceNode.connect(audioDest);
+          sourceNode.start();
+        } else {
+          slideDurationMs = Math.max(5000, scene.estimatedDurationSec * 1000);
+        }
+      } catch (err) {
+        console.warn('TTS Audio failed for scene, falling back to silent frame', err);
+        slideDurationMs = Math.max(5000, scene.estimatedDurationSec * 1000);
+      }
 
       onProgress?.(
-        progressPercent,
-        `Rendering Slide ${sceneIdx + 1} of ${totalScenes} in ${resolution.toUpperCase()} (${durationSec}s frame)...`
+        Math.round(((sceneIdx + 1) / totalScenes) * 90),
+        `Rendering Slide ${sceneIdx + 1} of ${totalScenes} (${Math.round(slideDurationMs/1000)}s)...`
       );
 
-      // Animate frame updates for this slide duration
       const startTime = Date.now();
-      const slideDurationMs = durationSec * 1000;
-
+      
       const frameInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
         if (elapsed >= slideDurationMs) {
@@ -125,17 +156,13 @@ export async function exportLectureVideo(
             hideCommandTags
           );
         }
-      }, 100);
+      }, 33);
     }
 
     renderNextSlide();
   });
 }
 
-/**
- * Draws a pristine, fully visible slide frame onto canvas.
- * Guaranteed 100% visible graphs without clipping.
- */
 export function drawSlideFrame(
   ctx: CanvasRenderingContext2D,
   scene: ParsedScene,
@@ -147,7 +174,6 @@ export function drawSlideFrame(
   watermark: WatermarkSettings,
   hideCommandTags: boolean = true
 ) {
-  // 1. Background (Dark pedagogical slate with subtle ambient radial glow)
   ctx.fillStyle = '#060b17';
   ctx.fillRect(0, 0, width, height);
 
@@ -164,30 +190,24 @@ export function drawSlideFrame(
   ctx.fillStyle = ambientGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Draw SatyaGyana Watermark
   drawWatermarkOnCanvas(ctx, watermark, width, height, scale);
 
-  // 3. Top Header Bar: Slide Number & Clean Title
   const padX = 60 * scale;
   const padY = 50 * scale;
 
-  // Slide Badge
   const badgeText = `SLIDE ${scene.slideNumber} / ${totalScenes}`;
   ctx.font = `bold ${13 * scale}px ui-monospace, SFMono-Regular, monospace`;
   const badgeWidth = ctx.measureText(badgeText).width + 24 * scale;
   const badgeHeight = 26 * scale;
-
   ctx.fillStyle = 'rgba(14, 165, 233, 0.18)';
   ctx.strokeStyle = 'rgba(14, 165, 233, 0.45)';
   ctx.lineWidth = 1.5 * scale;
   roundRect(ctx, padX, padY, badgeWidth, badgeHeight, 6 * scale);
   ctx.fill();
   ctx.stroke();
-
   ctx.fillStyle = '#38bdf8';
   ctx.fillText(badgeText, padX + 12 * scale, padY + 18 * scale);
 
-  // If NOT hiding command tags, draw non-highlight badges
   if (!hideCommandTags) {
     let tagOffset = padX + badgeWidth + 12 * scale;
     scene.commands.slice(0, 2).forEach((cmd) => {
@@ -205,25 +225,21 @@ export function drawSlideFrame(
     });
   }
 
-  // Slide Title (Clean, high-contrast, bold display)
   const titleY = padY + 54 * scale;
   ctx.fillStyle = '#ffffff';
   ctx.font = `900 ${28 * scale}px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif`;
   ctx.fillText(scene.title, padX, titleY);
 
-  // 4. Middle Content: Left Bullets & Right Scientific Model
   const middleY = titleY + 32 * scale;
   const middleHeight = height - middleY - (110 * scale);
   const colWidth = (width - padX * 2 - (40 * scale)) / 2;
-
-  // Left Column: High-Retention Content Cards
   const leftX = padX;
   let curBulletY = middleY + (10 * scale);
   const maxBullets = 4;
   const contentItems = scene.contentLines.slice(0, maxBullets);
 
   contentItems.forEach((line) => {
-    const cleanLine = line.replace(/^[•\-\*]\s*/, '').trim();
+    const cleanLine = line.replace(/^[ \-\*]\s*/, '').trim();
     const colonIdx = cleanLine.indexOf(':');
     let label = '';
     let body = cleanLine;
@@ -234,7 +250,6 @@ export function drawSlideFrame(
     }
 
     const cardH = 56 * scale;
-    // Card box
     ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.strokeStyle = 'rgba(51, 65, 85, 0.7)';
     ctx.lineWidth = 1 * scale;
@@ -242,19 +257,16 @@ export function drawSlideFrame(
     ctx.fill();
     ctx.stroke();
 
-    // Bullet dot
     ctx.fillStyle = '#38bdf8';
     ctx.beginPath();
     ctx.arc(leftX + 20 * scale, curBulletY + 28 * scale, 4 * scale, 0, Math.PI * 2);
     ctx.fill();
 
-    // Text
     const textStartX = leftX + 36 * scale;
     if (label) {
       ctx.font = `bold ${14 * scale}px system-ui, sans-serif`;
       ctx.fillStyle = '#38bdf8';
       ctx.fillText(label, textStartX, curBulletY + 26 * scale);
-
       const labelW = ctx.measureText(label).width;
       ctx.font = `normal ${13.5 * scale}px system-ui, sans-serif`;
       ctx.fillStyle = '#cbd5e1';
@@ -264,16 +276,12 @@ export function drawSlideFrame(
       ctx.fillStyle = '#e2e8f0';
       ctx.fillText(truncateText(ctx, body, colWidth - (50 * scale)), textStartX, curBulletY + 32 * scale);
     }
-
     curBulletY += cardH + (12 * scale);
   });
 
-  // Right Column: Programmatic Scientific / Economic Graph
-  // Guaranteed 100% visible: drawn completely within the right box!
   const rightX = leftX + colWidth + (40 * scale);
   drawScientificDiagramOnCanvas(ctx, scene.visualData, rightX, middleY, colWidth, middleHeight, scale);
 
-  // 5. Bottom Narration Subtitle Bar
   const bottomBarY = height - (85 * scale);
   const bottomBarW = width - padX * 2;
   const bottomBarH = 46 * scale;
@@ -285,29 +293,22 @@ export function drawSlideFrame(
   ctx.fill();
   ctx.stroke();
 
-  // Speaker dot
   ctx.fillStyle = '#38bdf8';
   ctx.beginPath();
   ctx.arc(padX + 22 * scale, bottomBarY + (23 * scale), 4 * scale, 0, Math.PI * 2);
   ctx.fill();
 
-  // Narration text
   ctx.fillStyle = '#f1f5f9';
   ctx.font = `italic ${13.5 * scale}px system-ui, sans-serif`;
   const narText = truncateText(ctx, scene.narration || '', bottomBarW - (130 * scale));
   ctx.fillText(`"${narText}"`, padX + 38 * scale, bottomBarY + (28 * scale));
 
-  // Time estimate badge
   const timeStr = `~${scene.estimatedDurationSec}s`;
   ctx.font = `bold ${11.5 * scale}px monospace`;
   ctx.fillStyle = '#38bdf8';
   ctx.fillText(timeStr, padX + bottomBarW - (55 * scale), bottomBarY + (28 * scale));
 }
 
-/**
- * Draws the official SatyaGyana Watermark onto canvas:
- * Supports 'both', 'logo-only', 'text-only' and 'circle' vs 'squircle'.
- */
 function drawWatermarkOnCanvas(
   ctx: CanvasRenderingContext2D,
   watermark: WatermarkSettings,
@@ -323,7 +324,6 @@ function drawWatermarkOnCanvas(
   ctx.save();
   ctx.globalAlpha = opacity;
 
-  // Position calculation
   let x = canvasWidth - (240 * userScale);
   let y = 35 * userScale;
 
@@ -339,11 +339,9 @@ function drawWatermarkOnCanvas(
   }
 
   if (displayMode === 'logo-only') {
-    // Single circular or squircle emblem badge
     const badgeSize = 48 * userScale;
     const emblemX = x + (180 * userScale) - badgeSize;
 
-    // Background
     ctx.fillStyle = '#08142c';
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2 * userScale;
@@ -358,11 +356,8 @@ function drawWatermarkOnCanvas(
       ctx.fill();
       ctx.stroke();
     }
-
-    // Emblem Book + Arrow Icon
     drawEmblemVectors(ctx, emblemX, y, badgeSize, userScale);
   } else if (displayMode === 'text-only') {
-    // Pure Typography Badge
     const padW = 180 * userScale;
     const padH = 40 * userScale;
 
@@ -373,11 +368,9 @@ function drawWatermarkOnCanvas(
     ctx.fill();
     ctx.stroke();
 
-    // Text: SatyaGyana
     ctx.font = `bold ${16 * userScale}px system-ui, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.fillText('Satya', x + 16 * userScale, y + 22 * userScale);
-
     const satyaW = ctx.measureText('Satya').width;
     ctx.fillStyle = '#38bdf8';
     ctx.fillText('Gyana', x + 16 * userScale + satyaW, y + 22 * userScale);
@@ -385,10 +378,9 @@ function drawWatermarkOnCanvas(
     if (watermark.showTagline) {
       ctx.font = `bold ${7.5 * userScale}px system-ui, sans-serif`;
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText('LEARN • GROW • SUCCEED', x + 16 * userScale, y + 33 * userScale);
+      ctx.fillText('LEARN   GROW   SUCCEED', x + 16 * userScale, y + 33 * userScale);
     }
   } else {
-    // Default: Both Logo Emblem + Brand Text
     const padW = 210 * userScale;
     const padH = 48 * userScale;
 
@@ -399,7 +391,6 @@ function drawWatermarkOnCanvas(
     ctx.fill();
     ctx.stroke();
 
-    // Emblem Icon
     const emblemSize = 34 * userScale;
     const emblemX = x + 8 * userScale;
     const emblemY = y + 7 * userScale;
@@ -407,6 +398,7 @@ function drawWatermarkOnCanvas(
     ctx.fillStyle = '#08142c';
     ctx.strokeStyle = '#0284c7';
     ctx.lineWidth = 1.5 * userScale;
+
     if (logoShape === 'circle') {
       ctx.beginPath();
       ctx.arc(emblemX + emblemSize / 2, emblemY + emblemSize / 2, emblemSize / 2, 0, Math.PI * 2);
@@ -417,19 +409,17 @@ function drawWatermarkOnCanvas(
       ctx.fill();
       ctx.stroke();
     }
+    
     drawEmblemVectors(ctx, emblemX, emblemY, emblemSize, userScale);
 
-    // Text: SatyaGyana
     const textX = emblemX + emblemSize + 10 * userScale;
     ctx.font = `bold ${15 * userScale}px system-ui, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.fillText('Satya', textX, y + 24 * userScale);
-
     const satyaW = ctx.measureText('Satya').width;
     ctx.fillStyle = '#38bdf8';
     ctx.fillText('Gyana', textX + satyaW, y + 24 * userScale);
 
-    // Cyan status dot
     ctx.beginPath();
     ctx.arc(textX + satyaW + ctx.measureText('Gyana').width + 8 * userScale, y + 20 * userScale, 3 * userScale, 0, Math.PI * 2);
     ctx.fillStyle = '#38bdf8';
@@ -438,17 +428,12 @@ function drawWatermarkOnCanvas(
     if (watermark.showTagline) {
       ctx.font = `bold ${7.5 * userScale}px system-ui, sans-serif`;
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText('LEARN • GROW • SUCCEED', textX, y + 37 * userScale);
+      ctx.fillText('LEARN   GROW   SUCCEED', textX, y + 37 * userScale);
     }
   }
-
   ctx.restore();
 }
 
-/**
- * Draws the inner vectors of the SatyaGyana logo:
- * Open white book + upward cyan arrow + circuit points.
- */
 function drawEmblemVectors(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -459,10 +444,8 @@ function drawEmblemVectors(
   const cx = x + size / 2;
   const cy = y + size / 2;
 
-  // Open book pages (white)
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  // Left page
   ctx.moveTo(cx - 2 * scale, cy + 6 * scale);
   ctx.bezierCurveTo(cx - 7 * scale, cy + 3 * scale, cx - 12 * scale, cy + 2 * scale, cx - 14 * scale, cy + 4 * scale);
   ctx.lineTo(cx - 13 * scale, cy - 6 * scale);
@@ -470,7 +453,6 @@ function drawEmblemVectors(
   ctx.closePath();
   ctx.fill();
 
-  // Right page
   ctx.beginPath();
   ctx.moveTo(cx + 2 * scale, cy + 6 * scale);
   ctx.bezierCurveTo(cx + 7 * scale, cy + 3 * scale, cx + 12 * scale, cy + 2 * scale, cx + 14 * scale, cy + 4 * scale);
@@ -479,15 +461,10 @@ function drawEmblemVectors(
   ctx.closePath();
   ctx.fill();
 
-  // Center upward cyan arrow
   ctx.fillStyle = '#00b4d8';
   ctx.strokeStyle = '#90e0ef';
   ctx.lineWidth = 1 * scale;
-
-  // Arrow shaft
   ctx.fillRect(cx - 1.5 * scale, cy - 5 * scale, 3 * scale, 11 * scale);
-
-  // Arrowhead
   ctx.beginPath();
   ctx.moveTo(cx, cy - 10 * scale);
   ctx.lineTo(cx + 4.5 * scale, cy - 4 * scale);
@@ -496,7 +473,6 @@ function drawEmblemVectors(
   ctx.fill();
   ctx.stroke();
 
-  // Circuit dots
   ctx.fillStyle = '#0084ff';
   ctx.beginPath();
   ctx.arc(cx - 8 * scale, cy - 2 * scale, 1.2 * scale, 0, Math.PI * 2);
@@ -504,10 +480,6 @@ function drawEmblemVectors(
   ctx.fill();
 }
 
-/**
- * Draws complete, fully visible scientific & economic models.
- * Completely eliminates any graph cutoff!
- */
 function drawScientificDiagramOnCanvas(
   ctx: CanvasRenderingContext2D,
   visualData: any,
@@ -517,7 +489,6 @@ function drawScientificDiagramOnCanvas(
   h: number,
   scale: number
 ) {
-  // Container Box
   ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
   ctx.strokeStyle = 'rgba(51, 65, 85, 0.8)';
   ctx.lineWidth = 1.5 * scale;
@@ -525,7 +496,6 @@ function drawScientificDiagramOnCanvas(
   ctx.fill();
   ctx.stroke();
 
-  // Header inside box
   const pad = 16 * scale;
   ctx.font = `bold ${10.5 * scale}px system-ui, sans-serif`;
   ctx.fillStyle = '#38bdf8';
@@ -535,7 +505,6 @@ function drawScientificDiagramOnCanvas(
   ctx.fillStyle = '#f8fafc';
   ctx.fillText(truncateText(ctx, visualData?.title || 'Market Equilibrium', w - (120 * scale)), x + pad, y + 38 * scale);
 
-  // Badge: Ceteris Paribus
   const cpW = 85 * scale;
   ctx.fillStyle = 'rgba(14, 165, 233, 0.15)';
   ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
@@ -546,15 +515,13 @@ function drawScientificDiagramOnCanvas(
   ctx.fillStyle = '#38bdf8';
   ctx.fillText('Ceteris Paribus', x + w - pad - cpW + (8 * scale), y + 29 * scale);
 
-  // Graph Area: Designed to fit 100% within the box with safe margins
   const graphTop = y + 54 * scale;
-  const graphBottom = y + h - (55 * scale); // Leaves 55px at bottom for axes labels
+  const graphBottom = y + h - (55 * scale);
   const graphLeft = x + (50 * scale);
   const graphRight = x + w - (40 * scale);
   const graphH = graphBottom - graphTop;
   const graphW = graphRight - graphLeft;
 
-  // Grid lines
   ctx.strokeStyle = 'rgba(51, 65, 85, 0.5)';
   ctx.lineWidth = 1 * scale;
   ctx.setLineDash([3 * scale, 3 * scale]);
@@ -566,7 +533,6 @@ function drawScientificDiagramOnCanvas(
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Y-Axis (Price P)
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 2 * scale;
   ctx.beginPath();
@@ -574,7 +540,6 @@ function drawScientificDiagramOnCanvas(
   ctx.lineTo(graphLeft, graphTop - (5 * scale));
   ctx.stroke();
 
-  // Y-Axis Arrow
   ctx.fillStyle = '#94a3b8';
   ctx.beginPath();
   ctx.moveTo(graphLeft, graphTop - (10 * scale));
@@ -591,13 +556,11 @@ function drawScientificDiagramOnCanvas(
   ctx.fillStyle = '#94a3b8';
   ctx.fillText('Price ($)', graphLeft - (42 * scale), graphTop + graphH * 0.5);
 
-  // X-Axis (Quantity Q)
   ctx.beginPath();
   ctx.moveTo(graphLeft - (5 * scale), graphBottom);
   ctx.lineTo(graphRight + (10 * scale), graphBottom);
   ctx.stroke();
 
-  // X-Axis Arrow
   ctx.beginPath();
   ctx.moveTo(graphRight + (15 * scale), graphBottom);
   ctx.lineTo(graphRight + (6 * scale), graphBottom - 4 * scale);
@@ -613,7 +576,6 @@ function drawScientificDiagramOnCanvas(
   ctx.fillStyle = '#94a3b8';
   ctx.fillText('Quantity (Units)', graphLeft + graphW * 0.35, graphBottom + (24 * scale));
 
-  // Supply Curve (S) - Upward Sloping
   ctx.strokeStyle = '#34d399';
   ctx.lineWidth = 3 * scale;
   ctx.beginPath();
@@ -625,7 +587,6 @@ function drawScientificDiagramOnCanvas(
   ctx.fillStyle = '#34d399';
   ctx.fillText('S', graphRight - (12 * scale), graphTop + (20 * scale));
 
-  // Demand Curve (D) - Downward Sloping
   ctx.strokeStyle = '#38bdf8';
   ctx.lineWidth = 3 * scale;
   ctx.beginPath();
@@ -635,13 +596,11 @@ function drawScientificDiagramOnCanvas(
 
   ctx.font = `bold ${13 * scale}px system-ui, sans-serif`;
   ctx.fillStyle = '#38bdf8';
-  ctx.fillText('D₁', graphRight - (12 * scale), graphBottom - (15 * scale));
+  ctx.fillText('D', graphRight - (12 * scale), graphBottom - (15 * scale));
 
-  // Equilibrium Point E0 (Intersection)
   const eqX = graphLeft + graphW * 0.5;
   const eqY = graphTop + graphH * 0.5;
 
-  // Dotted lines to axes
   ctx.strokeStyle = '#38bdf8';
   ctx.lineWidth = 1.5 * scale;
   ctx.setLineDash([4 * scale, 3 * scale]);
@@ -652,7 +611,6 @@ function drawScientificDiagramOnCanvas(
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Equilibrium marker circle
   ctx.fillStyle = '#38bdf8';
   ctx.beginPath();
   ctx.arc(eqX, eqY, 5 * scale, 0, Math.PI * 2);
@@ -660,25 +618,21 @@ function drawScientificDiagramOnCanvas(
 
   ctx.font = `bold ${11 * scale}px system-ui, sans-serif`;
   ctx.fillStyle = '#38bdf8';
-  ctx.fillText('E₀ (P₀, Q₀)', eqX + (8 * scale), eqY - (8 * scale));
+  ctx.fillText('E0', eqX + (8 * scale), eqY - (8 * scale));
 
-  // Axis Labels: P0 & Q0
   ctx.font = `bold ${10.5 * scale}px system-ui, sans-serif`;
-  ctx.fillText('P₀', graphLeft - (20 * scale), eqY + (4 * scale));
-  ctx.fillText('Q₀', eqX - (6 * scale), graphBottom + (16 * scale));
+  ctx.fillText('P0', graphLeft - (20 * scale), eqY + (4 * scale));
+  ctx.fillText('Q0', eqX - (6 * scale), graphBottom + (16 * scale));
 
-  // Bottom Parameters Bar
   const paramBarY = y + h - (32 * scale);
   ctx.fillStyle = 'rgba(2, 6, 23, 0.7)';
   roundRect(ctx, x + pad, paramBarY, w - pad * 2, 24 * scale, 4 * scale);
   ctx.fill();
-
   ctx.font = `normal ${9 * scale}px system-ui, sans-serif`;
   ctx.fillStyle = '#94a3b8';
-  ctx.fillText('Slope of Demand: ΔP/ΔQ < 0  •  Slope of Supply: ΔP/ΔQ > 0  •  Condition: Stable Equilibrium', x + pad + (10 * scale), paramBarY + (16 * scale));
+  ctx.fillText('Slope of Demand: ΔQ < 0     Slope of Supply: ΔQ > 0     Condition: Stable Equilibrium', x + pad + (10 * scale), paramBarY + (16 * scale));
 }
 
-// Helper: Truncate text to fit canvas width
 function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let truncated = text;
@@ -688,7 +642,6 @@ function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: num
   return truncated + '...';
 }
 
-// Helper: Canvas Rounded Rectangle
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
