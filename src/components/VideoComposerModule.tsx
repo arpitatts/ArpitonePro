@@ -86,7 +86,8 @@ export const VideoComposerModule: React.FC<VideoComposerModuleProps> = ({
     setExportMessage(`Initializing ${resolution.toUpperCase()} video render engine...`);
 
     try {
-      await exportLectureVideo(scenes, {
+      // 1. Capture the returned video Blob from the export service
+      const videoBlob = await exportLectureVideo(scenes, {
         watermarkSettings,
         resolution,
         hideCommandTags: true,
@@ -95,6 +96,27 @@ export const VideoComposerModule: React.FC<VideoComposerModuleProps> = ({
           setExportMessage(msg);
         },
       });
+
+      // 2. Create a secure browser download link
+      const videoUrl = URL.createObjectURL(videoBlob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.style.display = 'none';
+      downloadAnchor.href = videoUrl;
+      
+      // Clean the title for safe file naming
+      const cleanTitle = (scenes[0]?.title || 'Lecture').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+      downloadAnchor.download = `SatyaGyana_Lecture_${resolution.toUpperCase()}_${cleanTitle}_${Date.now()}.webm`;
+      
+      // 3. Trigger the actual file download to the hard drive
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+
+      // 4. Safely clear the memory after 60 seconds
+      setTimeout(() => {
+        URL.revokeObjectURL(videoUrl);
+      }, 60000);
+
       setExportProgress(100);
       setExportMessage(`Success! ${resolution.toUpperCase()} master video downloaded with SatyaGyana watermark.`);
       setTimeout(() => {
