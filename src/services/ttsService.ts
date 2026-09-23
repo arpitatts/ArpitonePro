@@ -29,7 +29,7 @@ class TtsService {
       const voice = req.language.toLowerCase().includes('hindi') ? 'hi-IN-MadhurNeural' : 'en-IN-PrabhatNeural';
       
       // Request audio stream from Python Render API
-      const apiUrl = `https://https://arpita-studio-backend.onrender.com/generate-audio?text=${encodeURIComponent(req.text)}&voice=${voice}`;
+      const apiUrl = `https://arpita-studio-backend.onrender.com/generate-audio?text=${encodeURIComponent(req.text)}&voice=${voice}`;
       
       const response = await fetch(apiUrl, {
         method: 'GET',
