@@ -12,7 +12,7 @@ export interface TtsRequest {
 
 export interface TtsResponse {
   success: boolean;
-  provider: 'gemini-tts' | 'web-speech' | 'mock-synthesis';
+  provider: 'gemini-tts' | 'web-speech' | 'mock-synthesis' | 'edge-tts';
   audioUrl?: string;
   message?: string;
 }
@@ -25,36 +25,32 @@ class TtsService {
   // Provider abstraction: calls server Gemini TTS or falls back to Web Speech
   public async synthesizeSpeech(req: TtsRequest): Promise<TtsResponse> {
     try {
-      const response = await fetch('/api/gemini/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: req.text,
-          language: req.language,
-          voice: req.voice,
-          speakingStyle: req.speakingStyle,
-          speed: req.speed,
-          customApiKey: req.customApiKey,
-        }),
+      // Select an authentic neural voice based on language
+      const voice = req.language.toLowerCase().includes('hindi') ? 'hi-IN-MadhurNeural' : 'en-IN-PrabhatNeural';
+      
+      // Request audio stream from Python Render API
+      const apiUrl = `https://https://arpita-studio-backend.onrender.com/generate-audio?text=${encodeURIComponent(req.text)}&voice=${voice}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: { 'x-access-key': 'ARPITONE2026' }
       });
 
       if (response.ok) {
-        const data = await response.json();
-        if (data.audioData) {
-          // Decode raw PCM / Audio to playable Blob URL
-          const audioUrl = this.pcmBase64ToAudioUrl(data.audioData);
-          return {
-            success: true,
-            provider: 'gemini-tts',
-            audioUrl,
-          };
-        }
+        // Convert the streamed MP3 directly into a playable Blob URL for the Video Recorder
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        
+        return {
+          success: true,
+          provider: 'edge-tts',
+          audioUrl,
+        };
       }
     } catch (e) {
-      console.warn('[TTS Provider] Server TTS request note, using browser speech synthesis:', e);
+      console.warn('[TTS Provider] Python server request failed, using browser synthesis:', e);
     }
 
-    // High fidelity browser Web Speech synthesis provider
     return {
       success: true,
       provider: 'web-speech',

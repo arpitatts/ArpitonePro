@@ -3,7 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
-
+import * as googleTTS from "google-tts-api";
 dotenv.config();
 
 const app = express();
