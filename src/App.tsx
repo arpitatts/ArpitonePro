@@ -23,6 +23,7 @@ import { ProjectManagerModule } from './components/ProjectManagerModule';
 import { UserManualModule } from './components/UserManualModule';
 import { FounderModule } from './components/FounderModule';
 import { SettingsModule } from './components/SettingsModule';
+import { AiPromptStudioModule } from './components/AiPromptStudioModule';
 
 export default function App() {
   const [currentModule, setCurrentModule] = useState<ArpitonModule>('dashboard');
@@ -201,6 +202,7 @@ export default function App() {
       'pdf-script': 'PDF → AI Teaching Script',
       'script-builder': 'AI Script Builder',
       'current-affairs': 'Current Affairs Studio',
+      'ai-prompt': 'AI Prompt Studio',
       'shortcuts': 'Script Command Engine',
       'composer': 'Video Composer',
       'assets': 'Satya Gyan Watermark Manager',
@@ -280,7 +282,7 @@ export default function App() {
       />
 
       {/* Main Body with Sidebar Navigation & Module Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden w-full">
         {/* Navigation Sidebar */}
         <Navigation
           currentModule={currentModule}
@@ -344,11 +346,13 @@ export default function App() {
             />
           )}
 
-          {currentModule === 'shortcuts' && (
-            <ShortcutsModule
-              onSendToSlideStudio={(script) => handleSendToSlideStudio(script, 'Custom Script from Command Engine')}
-            />
-          )}
+          {currentModule === 'ai-prompt' && (
+        <AiPromptStudioModule
+          currentLanguage={currentLanguage}
+          onSendToSlideStudio={handleSendToSlideStudio}
+          onSendToClassroom={handleSendToClassroom}
+        />
+      )}
 
           {currentModule === 'composer' && (
             <VideoComposerModule
