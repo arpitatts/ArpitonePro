@@ -112,7 +112,7 @@ Generate the complete ARPITON teaching script now for the following topic:
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition"
             >
               {copiedMasterPrompt ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedMasterPrompt ? 'Copied Master Prompt!' : 'Copy Master Prompt'}</span>
+              <span>{copiedMasterPrompt ? 'Copied!' : 'Copy Master Prompt'}</span>
             </button>
             <a
               href="https://chatgpt.com"
@@ -121,15 +121,6 @@ Generate the complete ARPITON teaching script now for the following topic:
               className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition"
             >
               <span>ChatGPT</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-            <a
-              href="https://claude.ai"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition"
-            >
-              <span>Claude</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
@@ -203,7 +194,6 @@ Generate the complete ARPITON teaching script now for the following topic:
                       </>
                     )}
                   </button>
-
                   <button
                     onClick={() => handleInsertIntoPlayground(item.example)}
                     className="text-[11px] px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-medium transition"
@@ -245,7 +235,6 @@ Generate the complete ARPITON teaching script now for the following topic:
               rows={18}
               className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y leading-relaxed"
             />
-
             <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
               <span>Ready for Module 2 (Script → Slides)</span>
               <button
