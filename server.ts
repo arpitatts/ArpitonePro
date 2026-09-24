@@ -182,8 +182,11 @@ LANGUAGE MANDATE:
 
 Transform this into an ARPITON structured teaching package containing:
 1. ARPITON TEACHING SCRIPT with '###' slide breaks and ARPITON commands: [DIAGRAM], [GRAPH], [EQUATION], [EXAM], [RECAP]
-2. IMAGE INSTRUCTIONS: On every slide, provide an exact instruction for the user to find a specific image online, formatted exactly like this:
-   [IMAGE_URL: PASTE_DRIVE_LINK_HERE] (Visual Needed: Detailed description of the chart or graph extracted from the PDF)
+2. MANDATORY IMAGE INSTRUCTION RULES:
+2.1 Do NOT generate or suggest automatic images. 
+2.2 On every slide, output an exact search instruction for the human user, formatted precisely like this:
+   [IMAGE_URL: PASTE_DRIVE_LINK_HERE] (Visual Needed: <Write a detailed description of the chart, map, historical photo, or scientific diagram the user should search for online>)
+2.3. The user will find this image, upload it to Google Drive, and replace 'PASTE_DRIVE_LINK_HERE' with their shareable link.
 3. Provide the translated spoken script clearly under 'Narration:'.
 
 Provide the complete ARPITON teaching script now.

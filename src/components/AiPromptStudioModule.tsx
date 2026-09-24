@@ -216,11 +216,12 @@ Format each slide with '### SLIDE N: <Title>', '[IMAGE: <Topic description>]', f
     }
 
     const imageDirective = includeImageInstructions
-      ? ` === VISUAL & IMAGE PLACEMENT MANDATES (NO TEXT OVERLAP) ===
-1. [IMAGE: <topic>] TAG: Include an explicit image command on each slide.
+      ? ` === VISUAL SEARCH INSTRUCTIONS & LAYOUT MANDATES ===
+1. NO AI IMAGES: Do NOT generate automatic images. Provide an explicit search prompt for the user instead. On every slide, output exactly this format on its own line:
+   [IMAGE_URL: PASTE_DRIVE_LINK_HERE] (Visual Needed: <Detailed description of the exact photo, map, or graph to search for online>)
 2. LAYOUT SEPARATION: The image is rendered strictly in its own right-hand media frame. It MUST NEVER overlap text.
 3. STRICT TEXT LIMITS: Absolute maximum of 3 to 4 short bullet points per slide. The total text per slide MUST NEVER exceed 250 characters.
-4. LARGE CONCEPTS & ECONOMICS: To teach a large concept (especially in Economics), DO NOT cram text into one slide. Instead, interlink 2 or 3 consecutive slides (e.g., Slide A: Core Formula, Slide B: Graph Shift, Slide C: Real-world impact).
+4. LARGE CONCEPTS & ECONOMICS: To teach a large concept, DO NOT cram text into one slide. Interlink 2 or 3 consecutive slides.
 5. WATERMARK SAFE ZONE: Keep all titles and points clean and unhindered.`
       : '';
 

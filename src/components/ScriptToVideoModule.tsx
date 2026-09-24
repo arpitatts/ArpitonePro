@@ -7,6 +7,7 @@ import { SatyaGyanWatermark } from './visuals/SatyaGyanWatermark';
 import { SatyaGyanBackgroundWatermark } from './visuals/SatyaGyanBackgroundWatermark';
 import { ttsService } from '../services/ttsService';
 import { downloadSlideAsPng, downloadStudyNotesAsPdf } from '../services/studyNotesPdfService';
+import { exportToPptx } from '../services/pptExportService';
 import {
   Play,
   Pause,
@@ -33,6 +34,7 @@ import {
   Layers,
   ArrowUpDown,
   MoveHorizontal,
+  Presentation,
 } from 'lucide-react';
 
 interface ScriptToVideoModuleProps {
@@ -55,6 +57,7 @@ export const ScriptToVideoModule: React.FC<ScriptToVideoModuleProps> = ({
   const [validationIssues, setValidationIssues] = useState<any[]>([]);
   const [isExportingSlide, setIsExportingSlide] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [isExportingPpt, setIsExportingPpt] = useState<boolean>(false);
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [exportResolution, setExportResolution] = useState<'1080p' | '4k'>('1080p');
   const [cleanStudentMode, setCleanStudentMode] = useState<boolean>(true);
@@ -197,6 +200,22 @@ export const ScriptToVideoModule: React.FC<ScriptToVideoModuleProps> = ({
       console.error('Study notes export error:', err);
     } finally {
       setIsExportingPdf(false);
+    }
+  };
+
+  // Export all slides as a PowerPoint (.pptx)
+  const handleDownloadPpt = async () => {
+    if (scenes.length === 0) return;
+    setIsExportingPpt(true);
+    setExportFeedback(`Generating PowerPoint Presentation...`);
+    try {
+      await exportToPptx(scenes, watermarkSettings);
+      setExportFeedback(`PowerPoint (.pptx) downloaded successfully!`);
+    } catch (err) {
+      console.error('PPT export error:', err);
+      setExportFeedback(`Error generating PPT.`);
+    } finally {
+      setIsExportingPpt(false);
     }
   };
 
@@ -597,6 +616,16 @@ export const ScriptToVideoModule: React.FC<ScriptToVideoModuleProps> = ({
                 >
                   <Download className="w-4 h-4" />
                 </button>
+
+                <button
+              onClick={handleDownloadPpt}
+              disabled={scenes.length === 0 || isExportingPpt}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 transition disabled:opacity-50"
+              title="Download as PowerPoint (.pptx)"
+            >
+              <Presentation className="w-3.5 h-3.5 text-white" />
+              <span>{isExportingPpt ? 'Generating PPT...' : 'Download PPT'}</span>
+            </button>
               </div>
             </div>
 

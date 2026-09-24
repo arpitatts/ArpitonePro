@@ -160,7 +160,7 @@ const CURATED_ENCYCLOPEDIC_IMAGES: Record<string, { url: string; caption: string
 export function resolveEducationalImage(query: string, customUrl?: string): SceneImageData {
   let finalUrl = customUrl || '';
 
-  // Auto-convert Google Drive sharing links into direct raw image downloads
+  // 1. Auto-convert Google Drive sharing links into direct image streams
   if (finalUrl.includes('drive.google.com/file/d/')) {
     const match = finalUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (match && match[1]) {
@@ -168,21 +168,23 @@ export function resolveEducationalImage(query: string, customUrl?: string): Scen
     }
   }
 
-  // Handle the AI's placeholder instruction
-  if (!finalUrl || finalUrl.includes('PASTE_DRIVE_LINK_HERE')) {
+  // 2. If no valid link is provided, do NOT load random AI/stock images.
+  // Instead, show a clean placeholder displaying the instruction prompt.
+  if (!finalUrl || finalUrl.includes('PASTE_DRIVE_LINK_HERE') || finalUrl.trim() === '') {
     return {
       prompt: query,
-      url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=1200&q=80', // Safe default fallback
-      caption: query || 'ACTION REQUIRED: Replace with Google Drive Link',
+      url: '', // Empty URL prevents rendering a fake image
+      caption: query || 'Visual Needed: Search online, upload to Drive, and paste link here',
       source: 'custom',
-      altText: 'Placeholder',
+      altText: 'Awaiting Google Drive Link',
     };
   }
 
+  // 3. Render your inserted Google Drive image
   return {
     prompt: query,
     url: finalUrl,
-    caption: 'Custom Inserted Visual',
+    caption: 'User Inserted Visual',
     source: 'custom',
     altText: query,
   };
