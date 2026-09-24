@@ -92,37 +92,24 @@ app.post("/api/gemini/generate-script", async (req, res) => {
     const ai = getGemini(customApiKey);
 
     const pedagogicalPrompt = `
-You are the master educational script architect for ARPITON (an AI Educational Content Creation Studio).
+You are the master educational script architect for ARPITON.
 Target subject: ${subject || "General Studies"}
 Topic: ${topic || "Core Educational Concept"}
 Audience/Level: ${audience || difficulty || "Undergraduate"}
-Language: ${language || "English"} (Maintain authentic educational vocabulary in ${language || "English"}!)
 Target duration: ${duration || "5-7 minutes"}
-Exam orientation: ${exam || "Comprehensive / Conceptual"}
-Teaching style: ${teachingStyle || "Engaging Professor with clean blackboard visualizations"}
-Visual intensity: ${visualIntensity || "High"}
-Desired Practice Questions: ${questionCount}
+
+LANGUAGE MANDATE:
+- All Slide Titles and Bullet Points MUST be written in strict ENGLISH.
+- The 'Narration:' section at the bottom of each slide MUST be written in ${language || "English"}.
+- Ensure the spoken ${language || "English"} narration naturally translates and explains the English bullet points.
 
 MANDATORY ARPITON SCRIPT FORMAT RULES:
 1. Use '###' as the delimiter for EVERY slide break (e.g. ### SLIDE TITLE).
-2. Inside each slide, use ARPITON square-bracket visual & pedagogic commands:
-   [DIAGRAM], [GRAPH], [EQUATION], [FORMULA], [TABLE], [TIMELINE], [MAP], [FLOW], [PROCESS], [3D], [EXPERIMENT], [ECONOMICS], [MICRO], [MACRO], [STATISTICS], [MATH], [PHYSICS], [CHEMISTRY], [BIOLOGY], [QUESTION], [ANSWER], [EXAM], [HIGHLIGHT], [EXAMPLE], [REALWORLD], [SOURCE], [PAUSE], [ZOOM], [FOCUS], [REVEAL], [COMPARE], [RECAP], [SUMMARY]
-3. REALISTIC SCIENTIFIC RULE: Do NOT describe cartoon graphics!
-   - For Economics: Supply and Demand, Equilibrium P0/Q0, Shifts, Marginal formulas (e.g., MC = ΔTC / ΔQ).
-   - For Math: Exact function equations (e.g. f(x) = x^2 - 4x + 3), coordinates, slope tangents.
-   - For Physics: F = ma, vectors, free body diagrams, projectile angles.
-   - For Chemistry: Balanced reaction equations, stoichiometry, molecular geometry.
-4. Follow this pedagogical sequence across the slides:
-   Slide 1: Hook & Learning Objectives [HIGHLIGHT]
-   Slide 2: Prior Knowledge & Intuitive Analogy [EXAMPLE]
-   Slide 3: Core Formal Concept & Definition [FORMULA] or [EQUATION]
-   Slide 4: Deep Scientific/Programmatic Visual [GRAPH] or [DIAGRAM] or [EXPERIMENT]
-   Slide 5: Real-World Application & Case Study [REALWORLD]
-   Slide 6: Common Student Misconceptions & Traps [EXAM]
-   Slide 7: Practice Question 1 (MCQ or Problem) [QUESTION] and [ANSWER]
-   Slide 8: Master Recap & Key Takeaways [RECAP] [SUMMARY]
-5. For speech narration, provide the spoken script clearly under 'Narration:'.
-6. Keep slide texts clean and bulleted so they never overflow.
+2. Inside each slide, use ARPITON visual commands: [DIAGRAM], [GRAPH], [EQUATION], [QUESTION], [ANSWER], [EXAM], [RECAP]
+3. IMAGE INSTRUCTIONS: Do NOT use AI image generators. Instead, on every slide, provide an exact instruction for the user to find a specific image online, formatted exactly like this:
+   [IMAGE_URL: PASTE_DRIVE_LINK_HERE] (Visual Needed: Detailed description of the map, graph, or photo the user should search for)
+4. Keep English slide texts clean and bulleted so they never overflow.
+5. Provide the translated spoken script clearly under 'Narration:'.
 
 Generate a complete, masterfully formatted ARPITON teaching script now.
 `;
@@ -186,24 +173,18 @@ app.post("/api/gemini/process-pdf", async (req, res) => {
 You are the AI Document Pedagogical Transformer for ARPITON.
 Analyze this uploaded educational source material (${fileName || "Educational document"}).
 Target Subject: ${subject}
-Language: ${language}
 Target Level: ${targetLevel}
 Teaching Depth: ${teachingDepth}
-Desired Video Duration: ${desiredDuration}
-Exam Orientation: ${examOrientation}
 
-Extract and understand:
-- Headings and conceptual hierarchy
-- Mathematical formulas & equations
-- Diagrams, charts, tables, and graphs
-- Numerical problems & case examples
+LANGUAGE MANDATE:
+- All Slide Titles and Bullet Points MUST be written in strict ENGLISH.
+- The 'Narration:' section at the bottom of each slide MUST be written in ${language || "English"}.
 
 Transform this into an ARPITON structured teaching package containing:
-1. TOPIC OUTLINE & LEARNING OBJECTIVES
-2. ARPITON TEACHING SCRIPT with '###' slide breaks and ARPITON commands:
-   [DIAGRAM], [GRAPH], [EQUATION], [FORMULA], [TABLE], [HIGHLIGHT], [QUESTION], [ANSWER], [EXAM], [RECAP]
-3. SCIENTIFIC VISUALIZATION INSTRUCTIONS (precise curves, axes, or formulas)
-4. EXAM-ORIENTED PRACTICE QUESTIONS with explanations.
+1. ARPITON TEACHING SCRIPT with '###' slide breaks and ARPITON commands: [DIAGRAM], [GRAPH], [EQUATION], [EXAM], [RECAP]
+2. IMAGE INSTRUCTIONS: On every slide, provide an exact instruction for the user to find a specific image online, formatted exactly like this:
+   [IMAGE_URL: PASTE_DRIVE_LINK_HERE] (Visual Needed: Detailed description of the chart or graph extracted from the PDF)
+3. Provide the translated spoken script clearly under 'Narration:'.
 
 Provide the complete ARPITON teaching script now.
 `;

@@ -158,90 +158,32 @@ const CURATED_ENCYCLOPEDIC_IMAGES: Record<string, { url: string; caption: string
  * Supports [IMAGE: topic], [IMAGE_URL: url], [DIAGRAM: topic]
  */
 export function resolveEducationalImage(query: string, customUrl?: string): SceneImageData {
-  const cleanQuery = query.trim().replace(/^\[IMAGE:?\s*|\]$/gi, '').replace(/^\[IMAGE_URL:?\s*|\]$/gi, '');
+  let finalUrl = customUrl || '';
 
-  if (customUrl && (customUrl.startsWith('http://') || customUrl.startsWith('https://') || customUrl.startsWith('data:'))) {
-    return {
-      prompt: cleanQuery || 'Custom Educational Visual',
-      url: customUrl,
-      caption: cleanQuery || 'Uploaded Visual Asset',
-      source: 'custom',
-      altText: cleanQuery,
-    };
-  }
-
-  // Look for matching keywords in curated encyclopedic images
-  const lower = cleanQuery.toLowerCase();
-
-  for (const [key, item] of Object.entries(CURATED_ENCYCLOPEDIC_IMAGES)) {
-    if (lower.includes(key)) {
-      return {
-        prompt: cleanQuery,
-        url: item.url,
-        caption: item.caption,
-        source: 'wikipedia',
-        altText: item.altText,
-      };
+  // Auto-convert Google Drive sharing links into direct raw image downloads
+  if (finalUrl.includes('drive.google.com/file/d/')) {
+    const match = finalUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      finalUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
     }
   }
 
-  // Dynamic topic-aware fallback based on academic category
-  if (lower.includes('law') || lower.includes('court') || lower.includes('justice') || lower.includes('judge') || lower.includes('article') || lower.includes('act')) {
+  // Handle the AI's placeholder instruction
+  if (!finalUrl || finalUrl.includes('PASTE_DRIVE_LINK_HERE')) {
     return {
-      prompt: cleanQuery,
-      url: CURATED_ENCYCLOPEDIC_IMAGES['supreme court'].url,
-      caption: `${cleanQuery} (Constitutional & Legal Jurisprudence)`,
-      source: 'wikipedia',
-      altText: cleanQuery,
+      prompt: query,
+      url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=1200&q=80', // Safe default fallback
+      caption: query || 'ACTION REQUIRED: Replace with Google Drive Link',
+      source: 'custom',
+      altText: 'Placeholder',
     };
   }
 
-  if (lower.includes('money') || lower.includes('market') || lower.includes('gdp') || lower.includes('deficit') || lower.includes('tax') || lower.includes('finance')) {
-    return {
-      prompt: cleanQuery,
-      url: CURATED_ENCYCLOPEDIC_IMAGES['economics'].url,
-      caption: `${cleanQuery} (Economic Analysis & Fiscal Framework)`,
-      source: 'wikipedia',
-      altText: cleanQuery,
-    };
-  }
-
-  if (lower.includes('cell') || lower.includes('plant') || lower.includes('organ') || lower.includes('bio') || lower.includes('gene')) {
-    return {
-      prompt: cleanQuery,
-      url: CURATED_ENCYCLOPEDIC_IMAGES['photosynthesis'].url,
-      caption: `${cleanQuery} (Biological Sciences & Cellular Architecture)`,
-      source: 'wikipedia',
-      altText: cleanQuery,
-    };
-  }
-
-  if (lower.includes('space') || lower.includes('rocket') || lower.includes('satellite') || lower.includes('orbit') || lower.includes('nasa')) {
-    return {
-      prompt: cleanQuery,
-      url: CURATED_ENCYCLOPEDIC_IMAGES['isro'].url,
-      caption: `${cleanQuery} (Aero-Space Engineering & Orbital Mechanics)`,
-      source: 'wikimedia',
-      altText: cleanQuery,
-    };
-  }
-
-  if (lower.includes('news') || lower.includes('paper') || lower.includes('editorial') || lower.includes('pib') || lower.includes('daily')) {
-    return {
-      prompt: cleanQuery,
-      url: CURATED_ENCYCLOPEDIC_IMAGES['current affairs'].url,
-      caption: `${cleanQuery} (Current Affairs & Analytical Journalism)`,
-      source: 'wikipedia',
-      altText: cleanQuery,
-    };
-  }
-
-  // Default encyclopedic fallback
   return {
-    prompt: cleanQuery,
-    url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=1200&q=80',
-    caption: `${cleanQuery} (Academic Masterclass Reference Visual)`,
-    source: 'wikipedia',
-    altText: cleanQuery,
+    prompt: query,
+    url: finalUrl,
+    caption: 'Custom Inserted Visual',
+    source: 'custom',
+    altText: query,
   };
 }
